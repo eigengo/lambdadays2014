@@ -15,14 +15,31 @@ object Shell extends App with Core with ConfigCoreConfiguration {
   import akka.actor.ActorDSL._
   import Utils._
 
+  implicit val _ = actor(new Act {
+    become {
+      case x => println(">>> " + x)
+    }
+  })
+
   // main command loop
+  @tailrec
   private def commandLoop(): Unit = {
+    Console.readLine() match {
+      case QuitCommand => return
+      case BeginCommand(count) => coordinator ! Begin(count.toInt)
+      case GetSessionsCommand => coordinator ! GetSessions
+      case ImageCommand(id, fileName) => readAll(fileName)(coordinator ! SingleImage(id, _))
+      case H264Command(id, fileName) => readChunks(fileName, 64)(coordinator ! FrameChunk(id, _))
+
+      case _ => println("WTF??!!")
+    }
+
+    commandLoop()
   }
 
   // start processing the commands
   commandLoop()
   system.shutdown()
-
 
 }
 
