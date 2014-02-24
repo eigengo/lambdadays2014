@@ -1,0 +1,3 @@
+/Users/janmachacek/Talks/lambdadays2014/native/rabbitmq-c/librabbitmq/CMakeFiles/rabbitmq.dir
+/Users/janmachacek/Talks/lambdadays2014/native/rabbitmq-c/tests/CMakeFiles/test_parse_url.dir
+/Users/janmachacek/Talks/lambdadays2014/native/rabbitmq-c/tests/CMakeFiles/test_tables.dir
