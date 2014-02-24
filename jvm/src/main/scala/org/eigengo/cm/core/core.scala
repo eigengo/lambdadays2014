@@ -11,9 +11,15 @@ trait CoreConfiguration {
 }
 
 trait ConfigCoreConfiguration extends CoreConfiguration {
+  def system: ActorSystem
 
   // connection factory
-  lazy val amqpConnectionFactory = ???
+  lazy val amqpConnectionFactory = {
+    val amqpHost = system.settings.config.getString("cm.amqp.host")
+    val cf = new ConnectionFactory()
+    cf.setHost(amqpHost)
+    cf
+  }
 
 }
 
