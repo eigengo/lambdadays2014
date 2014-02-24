@@ -66,6 +66,67 @@ private[core] class RecogSessionActor(amqpConnection: ActorRef, outputActor: Act
   val emptyBehaviour: StateFunction = { case _ => stay() }
   val amqp = ConnectionOwner.createChildActor(amqpConnection, Props(new RpcClient()))
 
+  startWith(Idle, Empty)
+
+  when(Idle, stateTimeout) {
+    case Event(Begin(minCoins), _) =>
+      sender ! self.path.name
+      goto(Active) using Starting(minCoins)
+  }
+
+  when(Active, stateTimeout) {
+    case Event(Frame(frame), Starting(minCoins)) =>
+      // Frame with no decoder yet. We will be needing the H264DecoderContext.
+      val decoder = new H264DecoderContext(countCoins(minCoins))
+      decoder.decode(frame, true)
+      stay() using Running(decoder)
+    case Event(Frame(frame), Running(decoder)) if frame.length > 0 =>
+      // Frame with existing decoder. Just decode. (Teehee--I said ``Just``.)
+      decoder.decode(frame, true)
+      stay()
+    case Event(Frame(_), Running(decoder)) =>
+      // Last frame
+      decoder.close()
+      goto(Completed)
+
+    case Event(Image(image), Starting(minCoins)) =>
+      // Image with no decoder yet. We will be needing the ChunkingDecoderContext.
+      val decoder = new ChunkingDecoderContext(countCoins(minCoins))
+      decoder.decode(image, true)
+      stay() using Running(decoder)
+    case Event(Image(image), Running(decoder)) if image.length > 0 =>
+      // Image with existing decoder. Shut up and apply.
+      decoder.decode(image, true)
+      stay()
+    case Event(Image(_), Running(decoder)) =>
+      // Empty image (following the previous case)
+      decoder.close()
+      goto(Completed)
+  }
+
+  when(Aborted)(emptyBehaviour)
+  when(Completed)(emptyBehaviour)
+
+  whenUnhandled {
+    case Event(StateTimeout, _) => goto(Aborted)
+  }
+
+  onTransition {
+    case _ -> Aborted => context.stop(self)
+    case _ -> Completed => context.stop(self)
+  }
+
+  initialize()
+
+  override def postStop(): Unit = {
+    context.stop(amqp)
+  }
+
+  def countCoins(minCoins: Int)(f: Array[Byte]): Unit =
+    amqpAsk[CoinResponse](amqp)("cm.exchange", "cm.coins.key", mkImagePayload(f)) onSuccess {
+      case res => if (res.coins.size >= minCoins) outputActor ! res
+    }
+
 }
 
 private[core] trait AmqpOperations {
